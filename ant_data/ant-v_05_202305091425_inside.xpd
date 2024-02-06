@@ -1,0 +1,83 @@
+#Expyriment 0.10.0 (Python 3.7.6), .xpd-file, coding: UTF-8
+#date: Tue May 09 2023 14:25:04
+#--EXPERIMENT INFO
+#e mainfile: ant-v.py
+#e sha1: 788604
+#e modules: 
+#e Experiment: ANT-R-task
+#e no between subject factors
+#--SUBJECT INFO
+#s id: 5
+subject_id,arrow_direction,flanker_congruency,alerting,cue_validity,cue_up,cue_down,target_position,response_key,reaction_time
+5,left,incong,spatial_cue,invalid,False,True,down,121,498
+5,right,cong,spatial_cue,valid,False,True,up,98,557
+5,left,incong,no_cue,nan,False,False,down,121,582
+5,left,incong,spatial_cue,valid,True,False,up,98,354
+5,right,cong,spatial_cue,invalid,True,False,up,98,492
+5,right,incong,spatial_cue,valid,False,True,up,98,749
+5,left,cong,no_cue,nan,False,False,up,121,510
+5,right,cong,dbl_cue,nan,True,True,up,98,510
+5,left,incong,spatial_cue,valid,True,False,down,121,552
+5,left,cong,spatial_cue,valid,True,False,down,121,454
+5,right,cong,spatial_cue,valid,False,True,down,98,407
+5,left,incong,spatial_cue,valid,True,False,up,121,508
+5,left,incong,spatial_cue,valid,True,False,down,98,449
+5,right,cong,spatial_cue,valid,False,True,down,98,489
+5,left,incong,no_cue,nan,False,False,down,121,570
+5,left,incong,dbl_cue,nan,True,True,down,121,541
+5,left,cong,spatial_cue,valid,True,False,down,121,445
+5,right,cong,dbl_cue,nan,True,True,up,98,503
+5,left,cong,spatial_cue,valid,True,False,up,121,447
+5,left,cong,spatial_cue,invalid,False,True,up,121,501
+5,left,incong,spatial_cue,invalid,False,True,down,121,489
+5,right,incong,no_cue,nan,False,False,down,98,577
+5,right,cong,dbl_cue,nan,True,True,up,98,517
+5,left,incong,spatial_cue,valid,True,False,up,121,485
+5,right,incong,no_cue,nan,False,False,down,98,613
+5,left,cong,no_cue,nan,False,False,up,121,534
+5,left,cong,spatial_cue,valid,True,False,up,121,424
+5,right,incong,spatial_cue,valid,False,True,up,121,510
+5,right,cong,spatial_cue,valid,False,True,up,98,634
+5,right,cong,spatial_cue,invalid,True,False,up,98,452
+5,right,incong,spatial_cue,invalid,True,False,down,121,404
+5,right,incong,no_cue,nan,False,False,down,98,588
+5,left,cong,spatial_cue,invalid,False,True,up,121,605
+5,right,cong,spatial_cue,valid,False,True,up,98,581
+5,left,cong,spatial_cue,invalid,False,True,up,121,491
+5,left,cong,spatial_cue,valid,True,False,up,121,438
+5,right,incong,spatial_cue,valid,False,True,down,98,470
+5,right,cong,spatial_cue,valid,False,True,down,98,485
+5,right,cong,spatial_cue,valid,False,True,down,98,425
+5,left,cong,spatial_cue,invalid,False,True,down,121,467
+5,left,incong,dbl_cue,nan,True,True,down,121,756
+5,right,incong,spatial_cue,valid,False,True,up,98,609
+5,left,cong,dbl_cue,nan,True,True,up,121,469
+5,right,incong,spatial_cue,valid,False,True,down,98,534
+5,right,cong,no_cue,nan,False,False,up,98,529
+5,left,incong,spatial_cue,valid,True,False,up,121,559
+5,right,incong,dbl_cue,nan,True,True,down,98,545
+5,left,cong,spatial_cue,valid,True,False,down,121,619
+5,left,cong,dbl_cue,nan,True,True,up,121,523
+5,left,cong,spatial_cue,valid,True,False,up,121,394
+5,left,incong,no_cue,nan,False,False,down,121,646
+5,right,incong,spatial_cue,invalid,True,False,down,98,573
+5,left,incong,spatial_cue,valid,True,False,down,121,551
+5,left,incong,spatial_cue,valid,True,False,down,121,579
+5,right,cong,spatial_cue,valid,False,True,up,98,490
+5,right,incong,dbl_cue,nan,True,True,down,121,463
+5,right,incong,spatial_cue,valid,False,True,down,98,665
+5,left,incong,spatial_cue,valid,True,False,down,121,548
+5,right,incong,spatial_cue,invalid,True,False,down,98,575
+5,right,incong,dbl_cue,nan,True,True,down,98,522
+5,right,cong,spatial_cue,valid,False,True,up,98,583
+5,right,incong,spatial_cue,valid,False,True,up,98,729
+5,right,cong,no_cue,nan,False,False,up,98,649
+5,right,cong,no_cue,nan,False,False,up,98,552
+5,left,incong,dbl_cue,nan,True,True,down,121,564
+5,right,cong,spatial_cue,invalid,True,False,up,98,447
+5,right,cong,spatial_cue,valid,False,True,down,98,472
+5,left,incong,spatial_cue,valid,True,False,up,121,638
+5,left,cong,spatial_cue,valid,True,False,down,121,666
+5,left,cong,no_cue,nan,False,False,up,121,540
+5,right,incong,spatial_cue,valid,False,True,down,98,505
+5,left,cong,dbl_cue,nan,True,True,up,121,491

@@ -1,0 +1,382 @@
+---
+title: "PREMS -- Analyse de données ANT and stabilométrie"
+author: "Christophe Pallier"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+  toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+```
+
+```{r, echo=FALSE, ouput="hide", message=FALSE, warning=FALSE}
+require(tidyr)
+require(readr)
+require(stringr)
+require(plyr)
+require(dplyr)
+require(ggplot2)
+require(afex)
+require(psych)
+library(tibble)
+library(forcats)
+library(emmeans)
+
+```
+
+
+```{r, warning=FALSE, message=FALSE, warning=FALSE, ouput="hide", echo=FALSE}
+## Gives count, mean, standard deviation, standard error of the mean, and confidence interval (default 95%).
+##   data: a data frame.
+##   measurevar: the name of a column that contains the variable to be summariezed
+##   groupvars: a vector containing names of columns that contain grouping variables
+##   na.rm: a boolean that indicates whether to ignore NA's
+##   conf.interval: the percent range of the confidence interval (default is 95%)
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE) {
+    library(plyr)
+
+    # New version of length which can handle NA's: if na.rm==T, don't count them
+    length2 <- function (x, na.rm=FALSE) {
+        if (na.rm) sum(!is.na(x))
+        else       length(x)
+    }
+
+    # This does the summary. For each group's data frame, return a vector with
+    # N, mean, and sd
+    datac <- ddply(data, groupvars, .drop=.drop,
+      .fun = function(xx, col) {
+        c(N    = length2(xx[[col]], na.rm=na.rm),
+          mean = mean   (xx[[col]], na.rm=na.rm),
+          sd   = sd     (xx[[col]], na.rm=na.rm)
+        )
+      },
+      measurevar
+    )
+   
+    # Rename the "mean" column    
+    #datac <- rename(datac, c("mean" = measurevar))
+
+    datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+
+    # Confidence interval multiplier for standard error
+    # Calculate t-statistic for confidence interval: 
+    # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+    ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+    datac$ci <- datac$se * ciMult
+
+    return(datac)
+}
+```
+
+
+# ANT Task
+
+*Behavioral Test*
+
+To assess participants' executive functions, we employed the Attentional Network Task (ANT; Fan et al., 2002; 2009), a paradigm designed to evaluate attentional focus capacity. In a sequence of trials, participants were instructed to promptly indicate the direction (left or right) of a target arrow presented on a computer screen. The target arrow was flanked by additional arrows that could either all align in the same direction as the target (congruent condition) or diverge in the opposite direction (incongruent condition). Furthermore, in certain trials, advance cues provided information about the timing and/or location of the impending target.
+
+Participants underwent this task on four occasions: prior to entering the scanner (Run "1_out"), within the scanner (Run "2_in"), inside the scanner with the added noise from an EPI sequence (Run "3_in_noise"), and outside the scanner (Run "4_out"). Evaluations outside the scanner were conducted in a soundproofed room, with participants seated before a computer screen displaying the stimuli. Within the scanner, stimuli were visible through a mirror mounted on the head antenna, with projections onto an LCD screen positioned at the rear of the scanner.
+
+
+Refs: 
+
+Fan, Jin, Bruce D. McCandliss, Tobias Sommer, Amir Raz, and Michael I. Posner. 2002. “Testing the Efficiency and Independence of Attentional Networks.” J Cogn Neurosci 14 (3): 340–47. https://doi.org/10.1162/089892902317361886.
+
+Fan, Jin, Xiaosi Gu, Kevin G. Guise, Xun Liu, John Fossella, Hongbin Wang, and Michael I. Posner. 2009. “Testing the Behavioral Interaction and Integration of Attentional Networks.” Brain and Cognition 70 (2): 209–20. https://doi.org/10.1016/j.bandc.2009.02.002.
+
+
+
+```{r, echo=FALSE, ouput="hide", message=FALSE, warning=FALSE}
+setwd("ant_data")
+xpd_files <- list.files(path='.', pattern = "*.xpd")
+alld <- readr::read_csv(xpd_files, id="file_name", comment="#", na="None")
+setwd("..")
+
+n_subj = length(unique(alld$subject_id))
+files <- sort(unique(alld$file_name))
+stopifnot(length(files) == n_subj * 4) 
+
+for (i in 1:n_subj)
+{
+   index = (i - 1) * 4
+   alld <- alld %>% mutate(file_name = str_replace(file_name, files[1 + index], "1_out")) %>% 
+                    mutate(file_name = str_replace(file_name, files[2 + index], "2_in")) %>%
+                    mutate(file_name = str_replace(file_name, files[3 + index], "3_in_noise")) %>%
+                    mutate(file_name = str_replace(file_name, files[4 + index], "4_out")) 
+}
+
+alld <- rename(alld, c("run" = "file_name"))
+alld$run = as.factor(alld$run)
+alld$subject_id = as.factor(alld$subject_id)
+alld$cue_validity = as.factor(alld$cue_validity)
+alld$flanker_congruency <- as.factor(alld$flanker_congruency)
+
+alld <- mutate(alld, "group" = factor(ifelse(as.integer(as.character(alld$subject_id)) > 21, "11.7T", "0T")))  # from subj22, we are in the experimental group
+alld <- mutate(alld, "correct" = ifelse(alld$run %in% c("1_out", "4_out"), 
+       (alld$response_key==102 & alld$arrow_direction=='left') | (alld$response_key==106 & alld$arrow_direction=='right'),
+       (alld$response_key==121 & alld$arrow_direction=='left') | (alld$response_key==98 & alld$arrow_direction=='right')))
+alld$correct[is.na(alld$response_key)] = FALSE
+
+```
+
+# Individual participants' global performance (hit rates and average reaction-times)
+
+Participants labeled 1 to 21 belong to the control group (no field), participants above 22 (included) belong to the experimental group (exposed to 11.7T).
+
+
+```{r, message=FALSE, warning=FALSE, ouput="hide", echo=FALSE}
+# Individual participants' global performance
+options(digits = 3)
+perf <- alld %>% group_by(subject_id) %>% summarize(group=group, prop_correct_responses = mean(correct, na.rm = TRUE), median_rt = median(reaction_time, na.rm=TRUE))
+
+
+# Probleme de bouton reponse pour le sujet 33: le supprimer
+perf <- perf %>% filter(subject_id != 33)
+
+
+p <- ggplot(perf, aes(x=prop_correct_responses, y=median_rt, colour = group, label = subject_id), show.legend = FALSE) + geom_point() + geom_text(vjust=-1) + xlim(0.80, 1.00) + ylim(400, 850)
+p <- ggplot(perf, aes(x=prop_correct_responses, y=median_rt, colour = group, label = subject_id), show.legend = FALSE) + geom_point() + geom_text(vjust=-1)
+
+p + theme(legend.position = "right")
+```
+
+
+Proportion of errors and slow responses to be removed for the analyses of reaction-times:
+
+```{r, echo=FALSE, ouput="hide", message=FALSE, warning=FALSE}
+allc <- alld %>% filter(correct & (reaction_time < 1500))
+paste("Excluding", nrow(alld) - nrow(allc), "data points out of", nrow(alld), "(", (100 * round((nrow(alld)-nrow(allc))/nrow(alld),3)), "%)", "(errors or slow responses)")
+```
+
+##  Focus on Reaction-Times 
+```{r, fig.width=2.5, fig.height=4, message=FALSE, warning=FALSE, echo=FALSE}
+individualRTs <- allc %>% group_by(subject_id) %>% 
+  summarize(group=group, median_rt = median(reaction_time, na.rm=TRUE)) %>% distinct(group, subject_id, .keep_all = TRUE)
+
+ggplot(individualRTs, aes(x=group, y=median_rt, color=group)) + 
+  #geom_boxplot(coef=5) + 
+  ylim(300, 800) + geom_jitter() + ylab("Reaction times (ms)")
+
+ggplot(individualRTs, aes(x=group, y=median_rt, color=group)) + 
+  geom_boxplot(coef=5) + 
+  ylim(300, 800)  + ylab("Reaction times (ms)")
+
+t.test(individualRTs$median_rt ~ individualRTs$group)
+```
+
+## Focus on hit rates (percentage correct responses)
+
+```{r, fig.width=2.5, fig.height=4,  message=FALSE, warning=FALSE,  echo=FALSE}
+perf <- alld %>%  group_by(subject_id) %>% 
+  summarize(group=group, prop_correct = mean(correct, na.rm = TRUE)) %>% distinct(group, subject_id, .keep_all = TRUE)
+
+# Probleme de bouton reponse pour le sujet 33: le supprimer
+perf <- perf %>% filter(subject_id != 33)
+
+ggplot(perf, aes(x=group, y=prop_correct, color=group)) + 
+  #geom_boxplot(coef=5) + 
+  ylim(0.85, 1) + geom_jitter() + ylab("Prop. correct responses")
+
+ggplot(perf, aes(x=group, y=prop_correct, color=group)) + 
+  geom_boxplot(coef=5) + 
+  ylim(0.85, 1) + ylab("Prop. correct responses")
+
+
+t.test(perf$prop_correct ~ perf$group)
+```
+
+## Performance of each group (group 1 = 0T, group2 = 11.7T) 
+
+```{r}
+print(psych::describeBy(perf, group="group"), digits=5)
+```
+
+# Run effect on reaction times
+
+How do reaction time evolve from run 1 to 4 ? We expect that participants may get faster with time as they are more and more trained. The main question is: is the 11.7T group going to be slowed down than the 0T group when they are inside the scanner (and maybe also after) ?
+
+Remark: because the stimulation conditions are not exactly the same in and out of the scanner, we do not expect the RTs to be the same in run2 & 3 than in run 1 & 4 (after removing the training effect). 
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+runeffect <- allc %>% group_by(subject_id, run, group) %>%  summarize(mean_rt = mean(reaction_time, na.rm=TRUE))
+pd <- position_dodge(0.1)
+ggplot(runeffect, aes(x=run, y=mean_rt, colour = group), show.legend = FALSE) +  geom_boxplot(position=pd) 
+
+## 
+runs <- summarySE(runeffect, measurevar="mean_rt", groupvars=c("run","group"))
+runs
+ggplot(runs, aes(x=run, y=mean, colour = group), show.legend = FALSE) +  geom_point(position=pd) + geom_line(aes(group=group), position=pd) +  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.1, position=pd) + ylim(450, 650) + ylab("Decision Time (ms)")
+```
+
+# Focus on the Flanker congruency effet (inhibition function)
+
+The participants must classify the direction of the central arrow.
+The neighboring arrows can point toward the same direction ("congruent" condition), or the opposite direction ("incongruent" condition).
+The difference in performance between the incongruent and the congruent conditions (the "flanker cost") measures how well the participant can "focus" his/her attention on the central arrow, inhibiting the influence of the irrelevant flanking arrows.
+
+
+
+```{r}
+runeffect <- allc %>% 
+  group_by(subject_id, run, group, flanker_congruency) %>%  
+  summarize(mean_rt = mean(reaction_time, na.rm=TRUE))
+
+runs <- summarySE(runeffect, measurevar="mean_rt", groupvars=c("run", "group", "flanker_congruency"))
+
+pd <- position_dodge(0.001) 
+ggplot(runs, aes(x=run, y=mean, color= flanker_congruency)) + 
+      geom_point(position=pd) +
+      geom_line(aes(group = flanker_congruency), position=pd) + 
+      geom_errorbar(aes(ymin=mean-se, ymax=mean+se, color=flanker_congruency), width=.1, position=pd) +
+      facet_wrap(~group) + ylim(350, 750) + ylab("Reaction-times (ms)")
+
+
+runs2 <- reshape(runs, idvar=c("run", "group"), timevar="flanker_congruency", direction = "wide")
+
+runs2$cost  <- runs2$mean.incong - runs2$mean.cong
+
+pd <- position_dodge(0.1) 
+ggplot(runs2, aes(x=run, y=cost, colour = group), show.legend = FALSE) +  
+  geom_point(position=pd) + 
+  geom_line(aes(group=group), position=pd) +
+  geom_errorbar(aes(ymin=cost-se.incong, ymax=cost+se.incong), width=.1, position=pd) + 
+  ylim(0, 250) + 
+  ylab("Flanker cost (ms)")
+```
+
+
+
+## Analysis of Variance Group*Run*Flanker_congruency 
+
+```{r}
+rt_mod <- aov_car(mean_rt ~ group + Error(subject_id/flanker_congruency * run), data=runeffect)
+knitr::kable(nice(rt_mod))
+```
+
+
+
+
+
+\newpage
+
+# Stabilometry
+
+
+*Method*: Before and after participants entered the scanner, their static balance was assessed. They stepped for 10s  (TODO: Check duration), first with their eyes open, then with eyes closed, on a plateform (AbilyCareTODO: insert REF) that computed a stability score (ranging from 0 to 99).   
+
+*Result*: Whether the stability test was taken with eyes opened or with eyes closed, all participants from both groups stayed in the normal stability range (90-99). Moreover, there was no significant nor sizeable effect of exposure to the scanner, nor any difference between the control (0T) and  the experimental (11.7T) groups (see below for average groups scores and the relevant t-tests). 
+
+
+```{r, echo=F}
+physio = read_csv('physio_data_20240202.csv', show_col_types = FALSE)
+physio = physio %>% mutate("group" = Groupe)
+
+equilibre = na.omit(bind_cols(select(physio, c("Rang", "group")), select(physio, contains("Equil"))))
+
+colnames(equilibre) = c("subject_id", "group", "O1", "C1", "O2", "C2")
+
+equilibre <- mutate(equilibre, group=fct_recode(as.factor(group), "0T"="A", "11.7T"="B"))
+
+# long format version
+equill = pivot_longer(equilibre, 3:6, names_to="test", values_to = "score")
+```
+
+## individual data
+
+Test conditions (O1, O2, C1, C2):
+
+* O = Eyes Opened
+* C = Eyes Closed
+* 1 = before entering the scanner
+* 2 = after exisiting the scanner
+
+
+The score represents the probability of belonging to a "normal" group of people without balance issues.
+
+According to an AbilyCare company internal test, a group of people with balance issues had a average score of 40. 
+
+I selected 50-90 on the y scale. No participant was below 90.
+
+
+
+```{r, fig.dim=c(8,12)}
+ggplot(equill, aes(x=test, y=score, color=group, fill=group)) + geom_col() + facet_wrap(~subject_id) + coord_cartesian(ylim = c(50, 100))
+
+```
+
+
+
+## Group analysis
+```{r}
+summary(equilibre)
+ggplot(equill, aes(x=test, y=score, color=group)) + geom_boxplot() + ylim(50, 100)
+
+balance_group = summarySE(equill, "score", c("group", "test")) %>% mutate("score" = mean)
+pd = position_dodge(0.1)
+ggplot(balance_group, aes(x=test, y=score, color=group)) + geom_point() + geom_line() +  geom_errorbar(aes(ymin=score-se, ymax=score+se), width=.1, position=pd) + ylim(90, 100)
+```
+
+
+### Analysis of Variance  Group * Test (O1,O2,C1,C2)
+```{r, warning=F, echo=F}
+print(balance_group)
+balance_aov = aov_car(score ~ group + Error(subject_id/test),data=equill)
+knitr::kable(nice(balance_aov))
+```
+```{r}
+
+```
+
+\newpage
+
+# Physiological Variables
+
+## Fréquence Cardiaque (FC)
+
+
+```{r, warnings=FALSE, fig.width=12, fig.height=11, cols.print = 12}
+fc = bind_cols(select(physio, c("Rang", "group")), select(physio, contains("FC")))
+fcl = pivot_longer(fc, -(1:2))
+ggplot(fcl, aes(x=name, y=value, group=Rang, color=group)) + geom_point() + geom_line(aes(group=Rang)) +geom_text(aes(label=Rang, hjust=2), position=position_dodge())
+```
+
+## Taux de saturation en oxygène (SpO2)
+
+
+```{r, warnings=FALSE, fig.width=12, fig.height=11, cols.print = 12}
+spo2 = bind_cols(select(physio, c("Rang", "group")), select(physio, contains("SpO2")))
+spo2l = pivot_longer(spo2, -(1:2))
+ggplot(spo2l, aes(x=name, y=value, group=Rang, color=group)) + geom_point() + geom_line(aes(group=Rang)) +geom_text(aes(label=Rang, hjust=2), position=position_dodge())
+```
+
+## Pression artérielle systolique (PAS)
+
+
+```{r, warnings=FALSE, fig.width=12, fig.height=11, cols.print = 12}
+pas = bind_cols(select(physio, c("Rang", "group")), select(physio, contains("PAS")))
+pasl = pivot_longer(pas, -(1:2))
+ggplot(pasl, aes(x=name, y=value, group=Rang, color=group)) + geom_point() + geom_line(aes(group=Rang)) +geom_text(aes(label=Rang, hjust=2), position=position_dodge())
+```
+
+## Pression Artérielle Dystolique (PAD)
+
+
+```{r, warnings=FALSE, fig.width=12, fig.height=11, cols.print = 12}
+pad = bind_cols(select(physio, c("Rang", "group")), select(physio, contains("PAD")))
+padl = pivot_longer(pad, -(1:2))
+ggplot(padl, aes(x=name, y=value, group=Rang, color=group)) + geom_point() + geom_line(aes(group=Rang)) +geom_text(aes(label=Rang, hjust=2), position=position_dodge())
+```
+
+## Température
+
+
+```{r, warnings=FALSE, fig.width=12, fig.height=11, cols.print = 12}
+temp = bind_cols(select(physio, c("Rang", "group")), select(physio, contains("Temp")))
+templ = pivot_longer(temp, -(1:2))
+ggplot(templ, aes(x=name, y=value, group=Rang, color=group)) + geom_point() + geom_line(aes(group=Rang)) +geom_text(aes(label=Rang, hjust=2), position=position_dodge())
+```
