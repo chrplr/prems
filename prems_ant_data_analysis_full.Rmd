@@ -1,0 +1,221 @@
+---
+title: "PREMS Analyse de données ANT"
+author: "Christophe Pallier"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, ouput="hide", message=FALSE, warning=FALSE}
+require(readr)
+require(stringr)
+require(plyr)
+require(dplyr)
+require(ggplot2)
+require(tidyr)
+require(ez)
+```
+
+
+The control group data are in `0T_behav_data` and the exeprimental group is in `11.7T_behav_data` (There are 4 `*.xpd` files per subject corresponding to each of the 4 runs of the ANT task: 2 ran outside of the scanner on pc6, and 2 ran inside the scanner on pc11).
+
+
+# Import Data 
+
+```{r, echo=FALSE, ouput="hide", message=FALSE, warning=FALSE}
+setwd("ant_data")
+xpd_files <- list.files(path='.', pattern = "*.xpd")
+alld <- readr::read_csv(xpd_files, id="file_name", comment="#", na="None")
+setwd("..")
+
+n_subj = length(unique(alld$subject_id))
+files <- sort(unique(alld$file_name))
+stopifnot(length(files) == n_subj * 4) 
+
+for (i in 1:n_subj)
+{
+   index = (i - 1) * 4
+   alld <- alld %>% mutate(file_name = str_replace(file_name, files[1 + index], "1_out")) %>% 
+                    mutate(file_name = str_replace(file_name, files[2 + index], "2_in")) %>%
+                    mutate(file_name = str_replace(file_name, files[3 + index], "3_in_noise")) %>%
+                    mutate(file_name = str_replace(file_name, files[4 + index], "4_out")) 
+}
+
+alld <- alld %>% rename("run" = "file_name")
+alld$run = as.factor(alld$run)
+alld$subject_id = as.factor(alld$subject_id)
+alld$cue_validity = as.factor(alld$cue_validity)
+alld$flanker_congruency <- as.factor(alld$flanker_congruency)
+
+alld <- mutate(alld, "group" = factor(ifelse(as.integer(as.character(alld$subject_id)) > 21, "experimental", "control")))  # from subj22, we are in the experimental group
+alld <- mutate(alld, "correct" = ifelse(alld$run %in% c("1_out", "4_out"), 
+       (alld$response_key==102 & alld$arrow_direction=='left') | (alld$response_key==106 & alld$arrow_direction=='right'),
+       (alld$response_key==121 & alld$arrow_direction=='left') | (alld$response_key==98 & alld$arrow_direction=='right')))
+alld$correct[is.na(alld$response_key)] = FALSE
+```
+
+Number of participants = `r n_subj`
+
+# Individual participants' global performance
+
+```{r}
+options(digits = 3)
+perf <- alld %>%  group_by(subject_id) %>% summarize(group=group, prop_correct_responses = mean(correct, na.rm = TRUE), median_rt = median(reaction_time, na.rm=TRUE))
+perf
+
+p <- ggplot(perf, aes(x=prop_correct_responses, y=median_rt, colour = group, label = subject_id), show.legend = FALSE) + geom_point() + geom_text(vjust=-1) + xlim(0.88, 1.00) + ylim(450, 750)
+#p <- ggplot(perf, aes(x=prop_correct_responses, y=median_rt, colour = subject_id, label = subject_id), show.legend = FALSE) + geom_point() + geom_text(vjust=-1)
+
+p + theme(legend.position = "right")
+```
+
+
+# Global distribution of reaction-times on correct responses
+
+```{r, echo=FALSE, ouput="hide", message=FALSE, warning=FALSE}
+allc <- alld %>% filter(correct)
+```
+```{r}
+ggplot(allc, aes(x = reaction_time)) + 
+  geom_histogram(colour = 1, fill = "white")
+
+```
+# Data cleaning
+
+```{r}
+allc <- alld %>% filter(correct & (reaction_time < 1500))
+paste("Excluding", nrow(alld) - nrow(allc), "data points out of", nrow(alld), "(", (100 * round((nrow(alld)-nrow(allc))/nrow(alld),3)), "%)", "(errors or slow responses)")
+```
+
+
+# Flanker congruency effet (inhibition function)
+
+The participants must classify the direction of the central arrow.
+The neighboring arrows can point toward the same direction ("congruent" condition), or the opposite direction ("incongruent" condition).
+The difference in performance between the incongruent and the congruent conditions measures how well the participant can "focus" his/her attention on the central arrow, inhibiting the influence of the irrelevant flanking arrows.
+
+## Control group (20 Ss)
+
+```{r, warning=FALSE}
+controls <- filter(allc, group=="control")
+
+x <- ezPlot(controls, dv=reaction_time, wid=subject_id, x=run, between=.(run, flanker_congruency), between_full = .list(run, flanker_congruency), split=.list(flanker_congruency))
+plot(x)
+x$data
+```
+
+## Experimental group
+
+```{r, warning=FALSE}
+exp <- filter(allc, group=="experimental")
+flankereffect <- exp %>% group_by(subject_id, run, flanker_congruency) %>%  summarize(mean_rt = mean(reaction_time, na.rm=TRUE))
+flankereffect$grouping = interaction(flankereffect$subject_id, flankereffect$flanker_congruency)
+ggplot(flankereffect, aes(x=run, y=mean_rt, colour = subject_id, label = subject_id), show.legend = FALSE) +  geom_point() + geom_line(aes(group=grouping, linetype=flanker_congruency)) + geom_text(vjust=-1)  + ylim(350, 1050)
+
+```
+
+```{r, warning=FALSE}
+ezANOVA(allc, dv=reaction_time, wid=subject_id, between=.(flanker_congruency, run))
+```
+
+# Alerting effect
+
+
+In some trials, the frame(s) of boxes flash just before the presentation of the target, alerting the participants that the target comes very soon. 
+If they exploit this cue, they should be faster when there is a cue than were there is none.
+
+```{r, warning=FALSE}
+alla <-subset(allc, alerting %in% c('no_cue', 'spatial_cue'))
+x <- ezPlot(alla, dv=reaction_time, wid=subject_id, x=run, between=.(run, alerting), between_full = .list(run, alerting, flanker_congruency), do_lines=TRUE, split=alerting)
+plot(x)
+x$data
+```
+
+```{r, warning=FALSE}
+ezANOVA(alla, dv=reaction_time, wid=subject_id, between=.(alerting, run))
+```
+
+# Orienting (Cue Validity effect)
+
+When there is a spatial cue, it can be _valid_ (cueing the actual location of target) or _invalid_ (cueing the wrong location).
+If participants exploit the cue, they should be faster in the _valid_ trials than in the _invalid_ ones.
+
+
+
+```{r, warning=FALSE}
+allo = subset(allc, allc$alerting=="spatial_cue")
+
+x <- ezPlot(allo, dv=reaction_time, wid=subject_id, x=run, between=.(run, cue_validity), between_full = .list(run, cue_validity), do_lines=TRUE, split=cue_validity)
+plot(x)
+x$data
+```
+
+```{r}
+ezANOVA(allo, dv=reaction_time, wid=subject_id, between=.(cue_validity, run))
+
+```
+
+# Percentage of errors per run
+
+```{r}
+error_perrun = 100 * with(alld, 1 - tapply(correct, list(run=run, sub=subject_id), mean, na.rm=T))
+t(round(error_perrun, 1))
+barplot(error_perrun, beside=T)
+```
+
+```{r, echo=FALSE, ouput="hide", message=FALSE, warning=FALSE}
+# Comprehensive descriptive stats
+
+cell_stats = ddply(
+	.data = alld
+	, .variables = .( subject_id, run , alerting, cue_validity , flanker_congruency )
+	, .fun <- function(x){
+		#Compute error rate as percent.
+		error_rate = (1-mean(x$correct, na.rm=TRUE))*100
+		#Compute mean RT (only accurate trials).
+		mean_rt = mean(x$reaction_time[x$correct==1], na.rm=TRUE)
+		#Compute SD RT (only accurate trials).
+		sd_rt = sd(x$reaction_time[x$correct==1], na.rm=TRUE )
+		return(c(error_rate=error_rate,mean_rt=mean_rt,sd_rt=sd_rt))
+	}
+)
+
+#cell_stats
+```
+
+
+
+```{r, echo=FALSE, ouput="hide", message=FALSE, warning=FALSE}
+# Comprehensive descriptive stats
+
+cell_stats = ddply(
+	.data = alld
+	, .variables = .( subject_id, run , alerting, cue_validity , flanker_congruency )
+	, .fun <- function(x){
+		#Compute error rate as percent.
+		error_rate = (1-mean(x$correct, na.rm=TRUE))*100
+		#Compute mean RT (only accurate trials).
+		mean_rt = mean(x$reaction_time[x$correct==1], na.rm=TRUE)
+		#Compute SD RT (only accurate trials).
+		sd_rt = sd(x$reaction_time[x$correct==1], na.rm=TRUE )
+		return(c(error_rate=error_rate,mean_rt=mean_rt,sd_rt=sd_rt))
+	}
+)
+
+cell_stats
+```
+```{r}
+flanker <- cell_stats %>% group_by(flanker_congruency, run, subject_id) %>% summarise(rt=mean(mean_rt))
+ggplot(flanker, aes(run, rt)) + geom_point(aes(colour=factor(flanker_congruency)))
+```
+
+```{r}
+alert <- cell_stats %>% group_by(alerting, run) %>% summarise(rt=mean(mean_rt))
+ggplot(alert, aes(run, rt)) + geom_point(aes(colour=factor(alerting)))
+```
+
