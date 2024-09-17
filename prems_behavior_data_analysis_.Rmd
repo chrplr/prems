@@ -1,5 +1,5 @@
 ---
-title: "PREMS -- Analyse de données ANT and stabilométrie"
+title: "PREMS -- Analyses of ANT cognitive task, balance tests and physiological measurements"
 author: "Christophe Pallier"
 date: "`r Sys.Date()`"
 output:
@@ -204,13 +204,24 @@ Remark: because the stimulation conditions are not exactly the same in and out o
 
 ```{r, warning=FALSE, message=FALSE, echo=FALSE}
 runeffect <- allc %>% group_by(subject_id, run, group) %>%  summarize(mean_rt = mean(reaction_time, na.rm=TRUE))
+write.table(runeffect, "ant_task_reaction_times.csv", sep=",",   row.names = FALSE)
 pd <- position_dodge(0.1)
 ggplot(runeffect, aes(x=run, y=mean_rt, colour = group), show.legend = FALSE) +  geom_boxplot(position=pd) 
 
 ## 
 runs <- summarySE(runeffect, measurevar="mean_rt", groupvars=c("run","group"))
 runs
-ggplot(runs, aes(x=run, y=mean, colour = group), show.legend = FALSE) +  geom_point(position=pd) + geom_line(aes(group=group), position=pd) +  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.1, position=pd) + ylim(450, 650) + ylab("Decision Time (ms)")
+ggplot(runs, aes(x=run, y=mean, colour = group), show.legend = FALSE) +  geom_point(position=pd) + geom_line(aes(group=group), position=pd, size=1) +  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.1, position=pd, size=1) + ylim(450, 650) + ylab("Decision Time (ms)") +
+theme(text = element_text(size = 20),
+      axis.text.x = element_text(size=16)) 
+ggsave("ant_task_decision_times.svg", device = svglite::svglite)
+ggsave("ant_task_decision_times.pdf")
+```
+## Analysis of Variance 
+
+```{r}
+rt <- aov_car(mean_rt ~ group + Error(subject_id/run), data=runeffect)
+knitr::kable(nice(rt))
 ```
 
 # Focus on the Flanker congruency effet (inhibition function)
@@ -225,7 +236,7 @@ The difference in performance between the incongruent and the congruent conditio
 runeffect <- allc %>% 
   group_by(subject_id, run, group, flanker_congruency) %>%  
   summarize(mean_rt = mean(reaction_time, na.rm=TRUE))
-
+write.table(runeffect, "ant_task_flanker_cost.csv", sep=",", row.names=FALSE)
 runs <- summarySE(runeffect, measurevar="mean_rt", groupvars=c("run", "group", "flanker_congruency"))
 
 pd <- position_dodge(0.001) 
@@ -243,10 +254,16 @@ runs2$cost  <- runs2$mean.incong - runs2$mean.cong
 pd <- position_dodge(0.1) 
 ggplot(runs2, aes(x=run, y=cost, colour = group), show.legend = FALSE) +  
   geom_point(position=pd) + 
-  geom_line(aes(group=group), position=pd) +
-  geom_errorbar(aes(ymin=cost-se.incong, ymax=cost+se.incong), width=.1, position=pd) + 
+  geom_line(aes(group=group), position=pd, size=1) +
+  geom_errorbar(aes(ymin=cost-se.incong, ymax=cost+se.incong), width=.1, position=pd, size=1) + 
   ylim(0, 250) + 
-  ylab("Flanker cost (ms)")
+  ylab("Flanker cost (ms)") +
+  theme(text = element_text(size = 20),
+      axis.text.x = element_text(size=16))
+ggsave("ant_task_flanker_cost.pdf")
+ggsave("ant_task_flanker_cost.svg", device = svglite::svglite)
+
+
 ```
 
 
@@ -264,7 +281,7 @@ knitr::kable(nice(rt_mod))
 
 \newpage
 
-# Stabilometry
+# Balance tests (stabilometry)
 
 
 *Method*: Before and after participants entered the scanner, their static balance was assessed. They stepped for 10s  (TODO: Check duration), first with their eyes open, then with eyes closed, on a plateform (AbilyCareTODO: insert REF) that computed a stability score (ranging from 0 to 99).   
@@ -273,7 +290,7 @@ knitr::kable(nice(rt_mod))
 
 
 ```{r, echo=F}
-physio = read_csv('physio_data_20240202.csv', show_col_types = FALSE)
+physio = read_csv('physio_data_20240421.csv', show_col_types = FALSE)
 physio = physio %>% mutate("group" = Groupe)
 
 equilibre = na.omit(bind_cols(select(physio, c("Rang", "group")), select(physio, contains("Equil"))))
@@ -284,6 +301,7 @@ equilibre <- mutate(equilibre, group=fct_recode(as.factor(group), "0T"="A", "11.
 
 # long format version
 equill = pivot_longer(equilibre, 3:6, names_to="test", values_to = "score")
+write.table(equill, "balance_test_data.csv", sep=",", row.names=FALSE)
 ```
 
 ## individual data
